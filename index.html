@@ -269,6 +269,14 @@
         <option value="difficile">Difficile — mots plus rares</option>
       </select>
     </label>
+    <label class="field">
+      <span>Force du Maître IA (ses coupes)</span>
+      <select id="set-strength">
+        <option value="debutant">😴 Débutant — ne coupe que l'évident</option>
+        <option value="serieux" selected>🤖 Sérieux — coupe quand il est sûr</option>
+        <option value="redoutable">🔥 Redoutable — coupe à la moindre idée</option>
+      </select>
+    </label>
     <div class="toggle-row">
       <span>🔊 Voix du Maître (le téléphone parle)</span>
       <label class="switch"><input type="checkbox" id="set-voice" checked><span class="slider"></span></label>
@@ -339,6 +347,7 @@ const settings = {
   get apiKey() { return store.get("apiKey", ""); },
   get model() { return store.get("model", "claude-opus-4-8"); },
   get difficulty() { return store.get("difficulty", "moyen"); },
+  get strength() { return store.get("strength", "serieux"); },
   get voice() { return store.get("voice", true); },
   get vocal() { return store.get("vocal", true); },
 };
@@ -346,6 +355,7 @@ function loadSettingsUI() {
   document.getElementById("set-apikey").value = settings.apiKey;
   document.getElementById("set-model").value = settings.model;
   document.getElementById("set-difficulty").value = settings.difficulty;
+  document.getElementById("set-strength").value = settings.strength;
   document.getElementById("set-voice").checked = settings.voice;
   document.getElementById("set-vocal").checked = settings.vocal;
 }
@@ -353,6 +363,7 @@ function saveSettings() {
   store.set("apiKey", document.getElementById("set-apikey").value.trim());
   store.set("model", document.getElementById("set-model").value);
   store.set("difficulty", document.getElementById("set-difficulty").value);
+  store.set("strength", document.getElementById("set-strength").value);
   store.set("voice", document.getElementById("set-voice").checked);
   store.set("vocal", document.getElementById("set-vocal").checked);
 }
@@ -781,13 +792,21 @@ const CLASSIFY_SCHEMA = {
   required: ["intent", "mot", "coupe", "confiant"], additionalProperties: false,
 };
 
+/* La force du Maître : à quel point il ose crier « Coupé ! » */
+const STRENGTH_DESC = {
+  debutant: `Tu es un Maître DÉBUTANT, bon public et pas très sûr de toi : tu ne mets "confiant": true que si l'indice est d'une évidence totale (le mot te vient instantanément, sans aucune hésitation possible). Au moindre doute, même léger, mets false et laisse passer. Ne cherche pas les interprétations subtiles ou les doubles sens : tu les rates.`,
+  serieux: `Tu es un Maître SÉRIEUX et équilibré : mets "confiant": true seulement si ton hypothèse est solide. Si l'indice est vague, piégeux ou à double sens, mets false et tais-toi.`,
+  redoutable: `Tu es un Maître REDOUTABLE, très agressif sur les coupes : dès que tu as une hypothèse plausible, même sur un indice détourné, un double sens ou une référence culturelle, mets "confiant": true. Ne mets false que si l'indice est réellement incompréhensible.`,
+};
+
 async function aiClassify(text) {
   return claude(
     `Tu es le Maître du Mot au jeu "Contact" (en français), en pleine partie. Ton mot secret est « ${game.secret} ». Les joueurs connaissent le début : « ${prefix().toUpperCase()} ». Mots déjà joués, interdits : ${game.usedWords.length ? game.usedWords.join(", ") : "(aucun)"}.
+${STRENGTH_DESC[settings.strength] || STRENGTH_DESC.serieux}
 Le téléphone, posé au milieu de la table, vient d'entendre cette phrase (transcription vocale parfois imparfaite) :
 « ${text} »
 Classe cette phrase :
-- "indice" : un joueur donne un indice ou une définition pour faire deviner à ses amis un mot commençant par « ${prefix().toUpperCase()} » (ex. "c'est un animal qui ronronne"). Dans ce cas, remplis "coupe" avec ta meilleure hypothèse du mot visé (il commence par « ${prefix().toUpperCase()} », accents ignorés, un seul mot). Règle du jeu : tu ne peux crier « Coupé ! » qu'AVANT que les joueurs fassent leur contact, et tu n'as qu'UNE tentative par indice. Mets "confiant": true seulement si ton hypothèse est solide ; si l'indice est trop vague ou piégeux, mets false et tais-toi (mais les joueurs pourront alors contacter sans risque).
+- "indice" : un joueur donne un indice ou une définition pour faire deviner à ses amis un mot commençant par « ${prefix().toUpperCase()} » (ex. "c'est un animal qui ronronne"). Dans ce cas, remplis "coupe" avec ta meilleure hypothèse du mot visé (il commence par « ${prefix().toUpperCase()} », accents ignorés, un seul mot). Règle du jeu : tu ne peux crier « Coupé ! » qu'AVANT que les joueurs fassent leur contact, et tu n'as qu'UNE tentative par indice. Le champ "confiant" décide si tu cries Coupé (true) ou si tu te tais (false) — applique le caractère du Maître décrit plus haut.
 - "contact" : quelqu'un crie contact pour dire qu'il a deviné le mot de l'indice.
 - "proposition_mot" : un joueur tente de deviner TON mot secret (ex. "je propose castor", "ton mot c'est castor"). Mets le mot proposé dans "mot".
 - "abandon" : les joueurs veulent arrêter la partie.
