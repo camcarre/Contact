@@ -207,10 +207,10 @@
     <h3>🗣️ Le tour de jeu (100 % à la voix, sans toucher l'écran !)</h3>
     <ul>
       <li>Le téléphone, posé au milieu, <b>écoute la table en continu</b> 🎤</li>
-      <li>Un joueur pense à un mot qui commence par les lettres révélées (ex. « CA... ») et donne un <b>indice à voix haute</b> : « C'est un animal qui ronronne » 🐱. Le Maître IA écoute… et <b>garde son idée pour lui</b> 🤐</li>
-      <li>Un autre joueur pense avoir trouvé ? Il crie <b>« CONTACT ! »</b></li>
-      <li>Le téléphone compte <b>« un, deux, trois »</b> et tout le monde dit son mot <b>en même temps — le Maître IA aussi !</b> 🗯️</li>
-      <li>Le Maître a dit le même mot que vous ? <b>Coupé</b>, il gagne la manche 🤖. Il s'est trompé mais vous aviez le même mot entre joueurs ? <b>Il doit révéler une lettre de plus !</b> 🎉</li>
+      <li>Un joueur pense à un mot qui commence par les lettres révélées (ex. « CA... ») et donne un <b>indice à voix haute</b> : « C'est un animal qui ronronne » 🐱</li>
+      <li>Le Maître IA doit réagir <b>tout de suite</b> : s'il croit savoir, il crie <b>« Coupé ! C'est… chat ! »</b> 🤖 — répondez-lui « oui » ou « non ». S'il hésite, il se tait… et c'est trop tard pour lui !</li>
+      <li>Un autre joueur a trouvé ? Il crie <b>« CONTACT ! »</b>. Le téléphone compte <b>« un, deux, trois »</b> et les deux joueurs disent leur mot <b>en même temps</b> 🗯️</li>
+      <li>Même mot entre joueurs (et pas de coupe avant) ? <b>Le Maître doit révéler une lettre de plus !</b> 🎉</li>
       <li>À tout moment, dites <b>« je propose le mot… »</b> pour tenter le mot secret, ou <b>« on abandonne »</b>.</li>
     </ul>
   </div>
@@ -664,19 +664,19 @@ async function onHeard(raw) {
   const np = normPhrase(text);
 
   switch (vocal.state) {
-    /* Après le duel : « est-ce que j'ai dit le même mot que vous ? » */
+    /* Le Maître vient de crier « Coupé ! [mot] » — avait-il raison ? */
     case "attente_confirmation_coupe": {
       if (saidYes(np)) {
         game.cuts++;
         game.usedWords.push(vocal.pendingGuess);
         renderGame();
         vocalResetRound();
-        await say("Coupé ! Et voilà le travail. Cet indice est grillé, il vous faudra mieux que ça !");
+        await say("Et voilà le travail ! Cet indice est grillé, il vous faudra mieux que ça.");
       } else if (saidNo(np)) {
-        vocal.state = "attente_meme_mot";
-        await say("Zut… Et vous deux alors, vous aviez dit le même mot ? Oui ou non ?");
+        vocalResetRound();
+        await say("Raté… Je ne peux plus rien couper sur cet indice : criez contact quand vous voulez !");
       } else {
-        await say(`Oui ou non : est-ce que j'ai dit le même mot que vous ?`);
+        await say(`Oui ou non : est-ce que c'était bien ${vocal.pendingGuess} ?`);
       }
       return;
     }
@@ -702,17 +702,6 @@ async function onHeard(raw) {
       revealLetter();
       return;
     }
-    /* Le téléphone a raté l'indice : le donneur le répète, puis duel immédiat */
-    case "attente_indice_contact": {
-      game.clues++;
-      renderGame();
-      let cut;
-      try { cut = await aiCut(text); }
-      catch (e) { vocalResetRound(); await say("Je n'ai pas réussi à réfléchir, on continue !"); return; }
-      vocal.pendingGuess = cut.guess;
-      await contactShowdown();
-      return;
-    }
     case "attente_abandon": {
       if (saidYes(np)) { vocalLose(); }
       else { vocal.state = "libre"; await say("Ah, vous reprenez du courage ! On continue."); }
@@ -721,7 +710,7 @@ async function onHeard(raw) {
   }
 
   /* ── État libre : le téléphone écoute la table ── */
-  if (/(^|\s)contact($|\s|!)/.test(np) && np.length < 30) { await contactShowdown(); return; }
+  if (/(^|\s)contact($|\s|!)/.test(np) && np.length < 30) { await playersContact(); return; }
   if (/repete|rappelle|quelles lettres|les lettres/.test(np)) { await say(`Mon mot commence par ${prefix().toUpperCase().split("").join(", ")}.`); return; }
   if (np.length < 6) return; // trop court : bruit
 
@@ -729,16 +718,20 @@ async function onHeard(raw) {
   try { d = await aiClassify(text); }
   catch (e) { return; } // au pire, on ignore la phrase
 
-  if (d.intent === "indice" && d.coupe) {
-    // Le Maître a entendu l'indice… mais il garde son idée pour lui !
-    // Il ne dira son mot qu'au moment du contact, en même temps que les joueurs.
+  if (d.intent === "indice") {
+    // La règle : le Maître ne peut couper qu'AVANT le contact.
+    // S'il croit savoir, il crie tout de suite. Sinon il se tait… et prend le risque.
     game.clues++;
     renderGame();
-    vocal.lastClue = text;
-    vocal.pendingGuess = cleanWord(d.coupe);
-    setAiMsg("… 🤐 (le Maître a entendu quelque chose et garde son idée pour lui)");
+    if (d.coupe && d.confiant) {
+      vocal.pendingGuess = cleanWord(d.coupe);
+      vocal.state = "attente_confirmation_coupe";
+      await say(`Coupé ! C'est… ${vocal.pendingGuess} ! Oui ou non ?`);
+    } else {
+      setAiMsg("… 🤔 (le Maître hésite… il laisse passer, à vos risques et périls de contacter !)");
+    }
   } else if (d.intent === "contact") {
-    await contactShowdown();
+    await playersContact();
   } else if (d.intent === "proposition_mot" && d.mot) {
     const w = cleanWord(d.mot);
     if (norm(w) === norm(game.secret)) { winGame(true); return; }
@@ -751,29 +744,24 @@ async function onHeard(raw) {
   // bavardage → silence
 }
 
-/* Le duel du contact : « un, deux, trois » et TOUT LE MONDE dit son mot
-   en même temps — le Maître IA aussi ! S'il dit le même mot que vous : coupé.
-   Sinon, si les deux joueurs avaient le même mot : lettre révélée. */
-async function contactShowdown() {
-  if (!vocal.pendingGuess) {
-    vocal.state = "attente_indice_contact";
-    await say("Contact ! Attends… je n'ai pas bien entendu l'indice. Donneur, répète-le vite !");
-    return;
-  }
-  openModal(`<h3 style="text-align:center">Tout le monde dit son mot<br>en même temps — moi aussi !</h3><div class="countdown" id="cd">…</div>`);
+/* Le contact : le Maître n'a pas coupé à temps, c'est trop tard pour lui.
+   Le téléphone compte « un, deux, trois » et les DEUX JOUEURS disent
+   leur mot en même temps. Même mot → lettre révélée. */
+async function playersContact() {
+  openModal(`<h3 style="text-align:center">Dites votre mot<br>en même temps !</h3><div class="countdown" id="cd">…</div>`);
   const el = () => document.getElementById("cd");
-  await say("Contact ! Attention…");
+  await say("Contact ! Je n'ai pas coupé, trop tard pour moi… Attention…");
   for (const n of ["Un", "Deux", "Trois"]) {
     if (el()) el().textContent = n;
     await say(n);
     await sleep(200);
   }
-  if (el()) el().textContent = vocal.pendingGuess.toUpperCase() + " !";
-  await say(`${vocal.pendingGuess} !`);
-  await sleep(600);
+  if (el()) el().textContent = "VOTRE MOT !";
+  await say("Votre mot !");
+  await sleep(1200);
   closeModal();
-  vocal.state = "attente_confirmation_coupe";
-  await say("Alors ? Est-ce que j'ai dit le même mot que vous ? Oui ou non ?");
+  vocal.state = "attente_meme_mot";
+  await say("Alors, vous avez dit le même mot ? Oui ou non ?");
 }
 
 function vocalLose() {
@@ -788,8 +776,9 @@ const CLASSIFY_SCHEMA = {
     intent: { type: "string", enum: ["indice", "contact", "proposition_mot", "abandon", "bavardage"] },
     mot: { type: "string", description: "Le mot proposé si intent=proposition_mot, sinon chaîne vide" },
     coupe: { type: "string", description: "Si intent=indice : ta meilleure hypothèse du mot visé (un seul mot, minuscules), sinon chaîne vide" },
+    confiant: { type: "boolean", description: "true si tu es assez sûr de ton hypothèse pour crier Coupé maintenant, false si tu préfères te taire" },
   },
-  required: ["intent", "mot", "coupe"], additionalProperties: false,
+  required: ["intent", "mot", "coupe", "confiant"], additionalProperties: false,
 };
 
 async function aiClassify(text) {
@@ -798,7 +787,7 @@ async function aiClassify(text) {
 Le téléphone, posé au milieu de la table, vient d'entendre cette phrase (transcription vocale parfois imparfaite) :
 « ${text} »
 Classe cette phrase :
-- "indice" : un joueur donne un indice ou une définition pour faire deviner à ses amis un mot commençant par « ${prefix().toUpperCase()} » (ex. "c'est un animal qui ronronne"). Dans ce cas, remplis "coupe" avec ta meilleure hypothèse du mot visé (il commence par « ${prefix().toUpperCase()} », accents ignorés, un seul mot) pour pouvoir crier Coupé.
+- "indice" : un joueur donne un indice ou une définition pour faire deviner à ses amis un mot commençant par « ${prefix().toUpperCase()} » (ex. "c'est un animal qui ronronne"). Dans ce cas, remplis "coupe" avec ta meilleure hypothèse du mot visé (il commence par « ${prefix().toUpperCase()} », accents ignorés, un seul mot). Règle du jeu : tu ne peux crier « Coupé ! » qu'AVANT que les joueurs fassent leur contact, et tu n'as qu'UNE tentative par indice. Mets "confiant": true seulement si ton hypothèse est solide ; si l'indice est trop vague ou piégeux, mets false et tais-toi (mais les joueurs pourront alors contacter sans risque).
 - "contact" : quelqu'un crie contact pour dire qu'il a deviné le mot de l'indice.
 - "proposition_mot" : un joueur tente de deviner TON mot secret (ex. "je propose castor", "ton mot c'est castor"). Mets le mot proposé dans "mot".
 - "abandon" : les joueurs veulent arrêter la partie.
