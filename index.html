@@ -207,9 +207,10 @@
     <h3>🗣️ Le tour de jeu (100 % à la voix, sans toucher l'écran !)</h3>
     <ul>
       <li>Le téléphone, posé au milieu, <b>écoute la table en continu</b> 🎤</li>
-      <li>Un joueur pense à un mot qui commence par les lettres révélées (ex. « CA... ») et donne un <b>indice à voix haute</b> : « C'est un animal qui ronronne » 🐱</li>
-      <li>Le Maître IA entend l'indice et peut crier <b>« Coupé ! »</b> en proposant un mot. Répondez-lui simplement <b>« oui »</b> ou <b>« non »</b> 🤖</li>
-      <li>Si un autre joueur a trouvé, il crie <b>« CONTACT ! »</b>. Si le Maître n'a pas coupé, le téléphone compte « 3, 2, 1 » et les deux joueurs disent leur mot <b>en même temps</b>. Même mot ? <b>Le Maître révèle une lettre de plus !</b> 🎉</li>
+      <li>Un joueur pense à un mot qui commence par les lettres révélées (ex. « CA... ») et donne un <b>indice à voix haute</b> : « C'est un animal qui ronronne » 🐱. Le Maître IA écoute… et <b>garde son idée pour lui</b> 🤐</li>
+      <li>Un autre joueur pense avoir trouvé ? Il crie <b>« CONTACT ! »</b></li>
+      <li>Le téléphone compte <b>« un, deux, trois »</b> et tout le monde dit son mot <b>en même temps — le Maître IA aussi !</b> 🗯️</li>
+      <li>Le Maître a dit le même mot que vous ? <b>Coupé</b>, il gagne la manche 🤖. Il s'est trompé mais vous aviez le même mot entre joueurs ? <b>Il doit révéler une lettre de plus !</b> 🎉</li>
       <li>À tout moment, dites <b>« je propose le mot… »</b> pour tenter le mot secret, ou <b>« on abandonne »</b>.</li>
     </ul>
   </div>
@@ -592,7 +593,8 @@ Règles :
    Le téléphone écoute la table en continu. Chaque phrase entendue est
    interprétée (localement pour oui/non/contact, par l'IA pour le reste)
    et le Maître répond à voix haute. Aucun bouton pendant la partie. */
-const vocal = { state: "libre", pendingGuess: "", contactPending: false, busy: false };
+const vocal = { state: "libre", pendingGuess: "", lastClue: "", busy: false };
+function vocalResetRound() { vocal.pendingGuess = ""; vocal.lastClue = ""; vocal.state = "libre"; }
 let hearingActive = false;
 
 function setMicStatus(s) {
@@ -662,38 +664,19 @@ async function onHeard(raw) {
   const np = normPhrase(text);
 
   switch (vocal.state) {
+    /* Après le duel : « est-ce que j'ai dit le même mot que vous ? » */
     case "attente_confirmation_coupe": {
       if (saidYes(np)) {
         game.cuts++;
         game.usedWords.push(vocal.pendingGuess);
-        vocal.state = "libre"; vocal.contactPending = false;
         renderGame();
-        await say("Et voilà le travail ! Cet indice est grillé. Suivant !");
+        vocalResetRound();
+        await say("Coupé ! Et voilà le travail. Cet indice est grillé, il vous faudra mieux que ça !");
       } else if (saidNo(np)) {
-        if (vocal.contactPending) {
-          vocal.contactPending = false;
-          await vocalCountdown();
-          vocal.state = "attente_meme_mot";
-          await say("Alors, vous avez dit le même mot ? Oui ou non ?");
-        } else {
-          vocal.state = "attente_contact";
-          await say("Raté, bon… Est-ce que quelqu'un avait crié contact ? Oui ou non ?");
-        }
-      } else {
-        await say(`Oui ou non : est-ce que c'était bien ${vocal.pendingGuess} ?`);
-      }
-      return;
-    }
-    case "attente_contact": {
-      if (saidYes(np)) {
-        await vocalCountdown();
         vocal.state = "attente_meme_mot";
-        await say("Vous avez dit le même mot ? Oui ou non ?");
-      } else if (saidNo(np)) {
-        vocal.state = "libre";
-        await say("Personne ? Ouf, je garde mes lettres !");
+        await say("Zut… Et vous deux alors, vous aviez dit le même mot ? Oui ou non ?");
       } else {
-        await say("Il y avait un contact ? Répondez par oui ou non.");
+        await say(`Oui ou non : est-ce que j'ai dit le même mot que vous ?`);
       }
       return;
     }
@@ -702,33 +685,32 @@ async function onHeard(raw) {
         vocal.state = "attente_mot_contact";
         await say("Bien joué… Dites-moi quel était votre mot.");
       } else if (saidNo(np)) {
-        vocal.state = "libre";
-        await say("Pas le même mot ! Quel quiproquo… Rien pour vous.");
+        vocalResetRound();
+        await say("Pas le même mot ! Quel quiproquo… Personne ne marque, on continue.");
       } else {
-        await say("Même mot tous les deux ? Oui ou non ?");
+        await say("Vous aviez le même mot tous les deux ? Oui ou non ?");
       }
       return;
     }
     case "attente_mot_contact": {
       const w = biggestWord(text);
       if (!w) { await say("Je n'ai pas compris le mot, répétez-le."); return; }
-      vocal.state = "libre";
+      vocalResetRound();
       if (norm(w) === norm(game.secret)) { winGame(true); return; }
       game.usedWords.push(w);
       game.contacts++;
       revealLetter();
       return;
     }
+    /* Le téléphone a raté l'indice : le donneur le répète, puis duel immédiat */
     case "attente_indice_contact": {
       game.clues++;
       renderGame();
       let cut;
       try { cut = await aiCut(text); }
-      catch (e) { vocal.state = "libre"; await say("Je n'ai pas réussi à réfléchir, on continue !"); return; }
+      catch (e) { vocalResetRound(); await say("Je n'ai pas réussi à réfléchir, on continue !"); return; }
       vocal.pendingGuess = cut.guess;
-      vocal.contactPending = true;
-      vocal.state = "attente_confirmation_coupe";
-      await say(`Coupé ! Est-ce que c'est… ${cut.guess} ? Oui ou non ?`);
+      await contactShowdown();
       return;
     }
     case "attente_abandon": {
@@ -739,11 +721,7 @@ async function onHeard(raw) {
   }
 
   /* ── État libre : le téléphone écoute la table ── */
-  if (/(^|\s)contact($|\s|!)/.test(np) && np.length < 30) {
-    vocal.state = "attente_indice_contact";
-    await say("Contact ! Donneur d'indice, répète ton indice, que je tente de couper !");
-    return;
-  }
+  if (/(^|\s)contact($|\s|!)/.test(np) && np.length < 30) { await contactShowdown(); return; }
   if (/repete|rappelle|quelles lettres|les lettres/.test(np)) { await say(`Mon mot commence par ${prefix().toUpperCase().split("").join(", ")}.`); return; }
   if (np.length < 6) return; // trop court : bruit
 
@@ -752,15 +730,15 @@ async function onHeard(raw) {
   catch (e) { return; } // au pire, on ignore la phrase
 
   if (d.intent === "indice" && d.coupe) {
+    // Le Maître a entendu l'indice… mais il garde son idée pour lui !
+    // Il ne dira son mot qu'au moment du contact, en même temps que les joueurs.
     game.clues++;
     renderGame();
+    vocal.lastClue = text;
     vocal.pendingGuess = cleanWord(d.coupe);
-    vocal.contactPending = false;
-    vocal.state = "attente_confirmation_coupe";
-    await say(`Coupé ! Est-ce que c'est… ${vocal.pendingGuess} ? Oui ou non ?`);
+    setAiMsg("… 🤐 (le Maître a entendu quelque chose et garde son idée pour lui)");
   } else if (d.intent === "contact") {
-    vocal.state = "attente_indice_contact";
-    await say("Contact ! Donneur d'indice, répète ton indice, que je tente de couper !");
+    await contactShowdown();
   } else if (d.intent === "proposition_mot" && d.mot) {
     const w = cleanWord(d.mot);
     if (norm(w) === norm(game.secret)) { winGame(true); return; }
@@ -773,18 +751,29 @@ async function onHeard(raw) {
   // bavardage → silence
 }
 
-async function vocalCountdown() {
-  openModal(`<h3 style="text-align:center">Dites votre mot en même temps !</h3><div class="countdown" id="cd">3</div>`);
+/* Le duel du contact : « un, deux, trois » et TOUT LE MONDE dit son mot
+   en même temps — le Maître IA aussi ! S'il dit le même mot que vous : coupé.
+   Sinon, si les deux joueurs avaient le même mot : lettre révélée. */
+async function contactShowdown() {
+  if (!vocal.pendingGuess) {
+    vocal.state = "attente_indice_contact";
+    await say("Contact ! Attends… je n'ai pas bien entendu l'indice. Donneur, répète-le vite !");
+    return;
+  }
+  openModal(`<h3 style="text-align:center">Tout le monde dit son mot<br>en même temps — moi aussi !</h3><div class="countdown" id="cd">…</div>`);
   const el = () => document.getElementById("cd");
-  for (const n of ["3", "2", "1"]) {
+  await say("Contact ! Attention…");
+  for (const n of ["Un", "Deux", "Trois"]) {
     if (el()) el().textContent = n;
     await say(n);
-    await sleep(250);
+    await sleep(200);
   }
-  if (el()) el().textContent = "CONTACT !";
-  await say("Contact !");
-  await sleep(500);
+  if (el()) el().textContent = vocal.pendingGuess.toUpperCase() + " !";
+  await say(`${vocal.pendingGuess} !`);
+  await sleep(600);
   closeModal();
+  vocal.state = "attente_confirmation_coupe";
+  await say("Alors ? Est-ce que j'ai dit le même mot que vous ? Oui ou non ?");
 }
 
 function vocalLose() {
@@ -862,7 +851,7 @@ async function startGame() {
     aiMode, over: false,
     vocal: aiMode && settings.vocal && canListen,
   };
-  vocal.state = "libre"; vocal.pendingGuess = ""; vocal.contactPending = false; vocal.busy = false;
+  vocalResetRound(); vocal.busy = false;
   show("screen-game");
   applyGameModeUI();
   setAiMsg("Je choisis mon mot secret… 🤫");
