@@ -343,6 +343,14 @@ function openModal(html) {
 }
 function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
 
+/* ══════════════════════ Pont natif (Capacitor) ══════════════════════
+   Dans l'app iOS/Android (stores), la WebView n'a pas la Web Speech API :
+   on passe par les plugins natifs, sinon on retombe sur l'API du navigateur. */
+const CapPlugins = (window.Capacitor && window.Capacitor.isNativePlatform &&
+                    window.Capacitor.isNativePlatform() && window.Capacitor.Plugins) || null;
+const nativeTTS = (CapPlugins && CapPlugins.TextToSpeech) || null;
+const nativeSR = (CapPlugins && CapPlugins.SpeechRecognition) || null;
+
 /* ══════════════════════ Voix ══════════════════════ */
 let frVoice = null;
 function pickVoice() {
@@ -355,7 +363,15 @@ if ("speechSynthesis" in window) {
 }
 function speak(text, done) {
   setAiMsg(text);
-  if (!settings.voice || !("speechSynthesis" in window)) { if (done) done(); return; }
+  if (!settings.voice) { if (done) done(); return; }
+  if (nativeTTS) {
+    nativeTTS.stop().catch(() => {});
+    nativeTTS.speak({ text, lang: "fr-FR", rate: 1.0 })
+      .then(() => { if (done) done(); })
+      .catch(() => { if (done) done(); });
+    return;
+  }
+  if (!("speechSynthesis" in window)) { if (done) done(); return; }
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "fr-FR";
@@ -373,7 +389,28 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp
 
 /* ══════════════════════ Écoute (micro) ══════════════════════ */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const canListen = !!(nativeSR || SR);
 function listenOnce(onResult, onFail) {
+  if (nativeSR) {
+    let aborted = false;
+    (async () => {
+      try {
+        const avail = await nativeSR.available().catch(() => null);
+        if (avail && avail.available === false) { if (!aborted) onFail("no-support"); return; }
+        const perm = await nativeSR.requestPermissions().catch(() => null);
+        if (perm && perm.speechRecognition && perm.speechRecognition !== "granted") {
+          if (!aborted) onFail("not-allowed"); return;
+        }
+        const res = await nativeSR.start({ language: "fr-FR", maxResults: 1, partialResults: false, popup: false });
+        if (aborted) return;
+        const t = res && res.matches && res.matches[0];
+        if (t && t.trim()) onResult(t.trim()); else onFail("silence");
+      } catch (e) {
+        if (!aborted) onFail("silence");
+      }
+    })();
+    return { abort() { aborted = true; nativeSR.stop().catch(() => {}); } };
+  }
   if (!SR) { onFail("no-support"); return null; }
   const r = new SR();
   r.lang = "fr-FR"; r.interimResults = false; r.maxAlternatives = 1;
@@ -404,7 +441,7 @@ function askSpoken(title, hint, next) {
   `);
   const micBtn = document.getElementById("m-mic");
   const textEl = document.getElementById("m-text");
-  if (!SR) { micBtn.style.display = "none"; }
+  if (!canListen) { micBtn.style.display = "none"; }
   micBtn.onclick = () => {
     micBtn.classList.add("listening");
     micBtn.textContent = "🔴  Je t'écoute…";

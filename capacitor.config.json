@@ -1,0 +1,12 @@
+{
+  "appId": "fr.camcarre.contact",
+  "appName": "Contact",
+  "webDir": "www",
+  "backgroundColor": "#12121f",
+  "ios": {
+    "contentInset": "automatic"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -2,7 +2,9 @@
 
 Le jeu **Contact** sur téléphone (iPhone **et** Android), pensé pour se jouer **à l'oral, à plusieurs (2 à 6 joueurs)** autour d'un seul téléphone posé au milieu de la table. Le téléphone incarne le **Maître du Mot** : une IA (Claude) qui choisit un mot secret, **écoute vos indices au micro**, essaie de vous **couper**, et **parle à voix haute** grâce à la synthèse vocale.
 
-C'est une **PWA** (Progressive Web App) : une simple page web, sans App Store, installable sur l'écran d'accueil en 10 secondes. Zéro framework, zéro build — un seul fichier `index.html`.
+C'est une **PWA** (Progressive Web App) : une simple page web, installable sur l'écran d'accueil en 10 secondes. Zéro framework — toute la logique tient dans `index.html`.
+
+**Et c'est aussi une vraie app native** 📱 : le projet embarque **Capacitor** avec les projets Android (`android/`) et iOS (`ios/`) déjà générés, plugins vocaux natifs inclus. Pour publier sur **Google Play et l'App Store**, suis le guide pas-à-pas : **[GUIDE-STORES.md](GUIDE-STORES.md)**. Un workflow GitHub Actions construit même un **APK Android téléchargeable** à chaque push.
 
 ---
 

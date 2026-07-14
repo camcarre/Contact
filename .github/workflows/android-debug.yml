@@ -1,0 +1,42 @@
+name: Build APK Android (debug)
+
+on:
+  push:
+    branches: [main, claude/contzct-game-dwxl94]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Construire la web app et synchroniser Capacitor
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Compiler l'APK de debug
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Publier l'APK en artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: contact-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
