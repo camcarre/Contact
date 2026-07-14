@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Contact — Le jeu de mots</title>
+<meta name="description" content="Le jeu Contact avec un Maître du Mot IA. Jouez en vocal, à plusieurs, sur un seul téléphone.">
+<meta name="theme-color" content="#12121f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Contact">
+<style>
+  :root {
+    --bg: #12121f;
+    --bg2: #1c1c30;
+    --card: #232340;
+    --accent: #ff7847;
+    --accent2: #ffb347;
+    --good: #3ddc84;
+    --bad: #ff5470;
+    --text: #f2f0ff;
+    --muted: #9a96c0;
+    --radius: 18px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1200px 800px at 50% -10%, #26264a 0%, var(--bg) 60%);
+    color: var(--text);
+    overflow-x: hidden;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .screen { display: none; min-height: 100dvh; flex-direction: column; padding: 24px 20px 32px; max-width: 520px; margin: 0 auto; }
+  .screen.active { display: flex; }
+
+  /* ---------- Home ---------- */
+  .logo { text-align: center; margin-top: 8dvh; }
+  .logo .bubble { font-size: 64px; }
+  .logo h1 {
+    font-size: 52px; font-weight: 900; letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .logo p { color: var(--muted); margin-top: 6px; font-size: 15px; }
+  .home-buttons { margin-top: auto; display: flex; flex-direction: column; gap: 14px; }
+
+  .btn {
+    border: none; border-radius: var(--radius); padding: 17px 20px;
+    font-size: 18px; font-weight: 700; color: var(--text); cursor: pointer;
+    background: var(--card); width: 100%; transition: transform .06s ease, filter .15s;
+    font-family: inherit;
+  }
+  .btn:active { transform: scale(.97); filter: brightness(1.15); }
+  .btn.primary { background: linear-gradient(90deg, var(--accent), #ff5470); box-shadow: 0 6px 24px rgba(255, 84, 112, .35); }
+  .btn.good { background: linear-gradient(90deg, #1f9d5f, var(--good)); color: #06281a; }
+  .btn.ghost { background: transparent; border: 2px solid var(--card); color: var(--muted); }
+  .btn.small { padding: 12px 16px; font-size: 15px; width: auto; }
+  .btn:disabled { opacity: .45; pointer-events: none; }
+
+  .hint { text-align: center; color: var(--muted); font-size: 13px; margin-top: 14px; line-height: 1.5; }
+
+  /* ---------- Header ---------- */
+  .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .topbar h2 { font-size: 22px; font-weight: 800; flex: 1; }
+  .icon-btn {
+    background: var(--card); border: none; color: var(--text); font-size: 20px;
+    width: 44px; height: 44px; border-radius: 14px; cursor: pointer; flex-shrink: 0;
+  }
+
+  /* ---------- Rules / Settings ---------- */
+  .card { background: var(--card); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; line-height: 1.6; font-size: 15px; }
+  .card h3 { color: var(--accent2); margin-bottom: 8px; font-size: 16px; }
+  .card ul { padding-left: 18px; }
+  .card li { margin-bottom: 6px; }
+  label.field { display: block; margin-bottom: 16px; }
+  label.field span { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  input[type=password], input[type=text], select, textarea {
+    width: 100%; padding: 14px; border-radius: 14px; border: 2px solid var(--card);
+    background: var(--bg2); color: var(--text); font-size: 16px; font-family: inherit; outline: none;
+  }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 16px; }
+  .toggle-row span { font-size: 15px; font-weight: 600; }
+  .switch { position: relative; width: 54px; height: 32px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--bg2); border-radius: 32px; transition: .2s; cursor: pointer; }
+  .slider:before { content: ""; position: absolute; height: 24px; width: 24px; left: 4px; top: 4px; background: var(--muted); border-radius: 50%; transition: .2s; }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider:before { transform: translateX(22px); background: #fff; }
+
+  /* ---------- Game ---------- */
+  .word-panel { background: var(--card); border-radius: var(--radius); padding: 22px 16px; text-align: center; }
+  .word-panel .label { font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .letters { margin-top: 12px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .letter {
+    width: 44px; height: 54px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 900; background: linear-gradient(180deg, var(--accent), #e0532a);
+    color: #fff; box-shadow: 0 4px 12px rgba(255, 120, 71, .4);
+  }
+  .letter.more { background: var(--bg2); color: var(--muted); box-shadow: none; font-size: 22px; }
+  .stats { display: flex; justify-content: center; gap: 18px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .stats b { color: var(--text); }
+
+  .ai-bubble {
+    margin-top: 16px; background: var(--bg2); border-radius: var(--radius); padding: 16px;
+    display: flex; gap: 12px; align-items: flex-start; min-height: 84px;
+  }
+  .ai-bubble .face { font-size: 34px; line-height: 1; }
+  .ai-bubble .msg { font-size: 16px; line-height: 1.45; }
+  .ai-bubble .msg .sub { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  .game-actions { margin-top: auto; display: flex; flex-direction: column; gap: 12px; padding-top: 18px; }
+  .mic-btn {
+    border: none; border-radius: 24px; padding: 22px; font-size: 20px; font-weight: 800;
+    background: linear-gradient(90deg, var(--accent), #ff5470); color: #fff; cursor: pointer;
+    box-shadow: 0 8px 28px rgba(255, 84, 112, .4); width: 100%; font-family: inherit;
+    transition: transform .06s;
+  }
+  .mic-btn:active { transform: scale(.97); }
+  .mic-btn.listening { animation: pulse 1.1s infinite; background: linear-gradient(90deg, #ff3d5e, #c22045); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,84,112,.5);} 50% { box-shadow: 0 0 0 18px rgba(255,84,112,0);} }
+  .row { display: flex; gap: 10px; }
+  .row .btn { flex: 1; }
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(6, 6, 14, .72); display: none;
+    align-items: flex-end; justify-content: center; z-index: 50; backdrop-filter: blur(4px);
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg2); border-radius: 26px 26px 0 0; padding: 26px 22px calc(26px + env(safe-area-inset-bottom));
+    width: 100%; max-width: 520px; animation: up .22s ease;
+  }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal h3 { font-size: 20px; margin-bottom: 8px; }
+  .modal p { color: var(--muted); font-size: 15px; line-height: 1.5; margin-bottom: 16px; }
+  .modal .big-word {
+    text-align: center; font-size: 34px; font-weight: 900; color: var(--accent2);
+    margin: 14px 0 20px; text-transform: uppercase; letter-spacing: 1px; word-break: break-word;
+  }
+  .modal .buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+  .countdown { text-align: center; font-size: 90px; font-weight: 900; color: var(--accent2); padding: 30px 0; }
+  .spinner {
+    width: 44px; height: 44px; border: 4px solid var(--card); border-top-color: var(--accent);
+    border-radius: 50%; margin: 24px auto; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .end-emoji { text-align: center; font-size: 72px; margin: 10px 0; }
+  .toast {
+    position: fixed; top: calc(16px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    background: var(--bad); color: #fff; padding: 12px 20px; border-radius: 14px; font-size: 14px;
+    font-weight: 600; z-index: 99; display: none; max-width: 90vw; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ ACCUEIL ═══════════════ -->
+<section id="screen-home" class="screen active">
+  <div class="logo">
+    <div class="bubble">🗣️💥</div>
+    <h1>CONTACT</h1>
+    <p>Le jeu de mots vocal — avec un Maître du Mot IA</p>
+  </div>
+  <div class="home-buttons">
+    <button class="btn primary" onclick="startGame()">▶️ &nbsp;Jouer</button>
+    <button class="btn" onclick="show('screen-rules')">📖 &nbsp;Comment jouer ?</button>
+    <button class="btn" onclick="show('screen-settings')">⚙️ &nbsp;Réglages &amp; IA</button>
+  </div>
+  <p class="hint" id="install-hint">📲 Pour installer l'app : ouvre le menu de ton navigateur puis « Ajouter à l'écran d'accueil ».</p>
+</section>
+
+<!-- ═══════════════ RÈGLES ═══════════════ -->
+<section id="screen-rules" class="screen">
+  <div class="topbar">
+    <button class="icon-btn" onclick="show('screen-home')">←</button>
+    <h2>Comment jouer ?</h2>
+  </div>
+  <div class="card">
+    <h3>🎯 Le but</h3>
+    Le téléphone est le <b>Maître du Mot</b> : il choisit un mot secret et vous en révèle la première lettre.
+    Votre mission à tous : <b>deviner son mot</b> en lui arrachant des lettres, une par une !
+  </div>
+  <div class="card">
+    <h3>🗣️ Le tour de jeu (tout se passe à l'oral !)</h3>
+    <ul>
+      <li>Un joueur pense à un mot qui commence par les lettres révélées (ex. « CA... ») et donne un <b>indice à voix haute</b> : « C'est un animal qui ronronne » 🐱</li>
+      <li>Si un <b>autre joueur</b> pense avoir trouvé, il crie <b>« CONTACT ! »</b></li>
+      <li>Mais attention : le joueur qui a donné l'indice appuie sur le micro et <b>répète son indice au téléphone</b>. Le Maître IA essaie alors de deviner le mot pour crier <b>« Coupé ! »</b> 🤖</li>
+      <li>Si l'IA trouve le mot → l'indice est grillé, rien ne se passe.</li>
+      <li>Si l'IA se trompe → les deux joueurs comptent « 3, 2, 1 » et disent leur mot <b>en même temps</b>. Si c'est le même mot : <b>le Maître doit révéler une lettre de plus !</b> 🎉</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>🏆 Gagner</h3>
+    À tout moment, un joueur peut tenter de deviner le <b>mot secret complet</b> avec le bouton 🎯.
+    Vous gagnez si vous le trouvez (ou si toutes ses lettres sont révélées). Le Maître IA gagne si vous abandonnez !
+  </div>
+  <div class="card">
+    <h3>💡 Conseils</h3>
+    <ul>
+      <li>2 à 6 joueurs + le téléphone posé au milieu, volume à fond 🔊</li>
+      <li>Faites des indices malins : assez clairs pour vos amis, trop tordus pour l'IA !</li>
+      <li>On ne peut pas réutiliser un mot déjà « coupé » ou déjà contacté.</li>
+    </ul>
+  </div>
+  <button class="btn primary" onclick="startGame()">▶️ &nbsp;C'est parti !</button>
+</section>
+
+<!-- ═══════════════ RÉGLAGES ═══════════════ -->
+<section id="screen-settings" class="screen">
+  <div class="topbar">
+    <button class="icon-btn" onclick="saveSettings(); show('screen-home')">←</button>
+    <h2>Réglages</h2>
+  </div>
+
+  <div class="card">
+    <h3>🤖 Maître du Mot IA</h3>
+    <p style="color:var(--muted); font-size:14px; margin-bottom:14px;">
+      L'IA (Claude) écoute vos indices et essaie de vous couper. Il faut une clé API Anthropic
+      (<b>console.anthropic.com</b> → API Keys). La clé reste <b>uniquement sur ce téléphone</b>.
+    </p>
+    <label class="field">
+      <span>Clé API Anthropic</span>
+      <input type="password" id="set-apikey" placeholder="sk-ant-..." autocomplete="off">
+    </label>
+    <label class="field">
+      <span>Modèle</span>
+      <select id="set-model">
+        <option value="claude-opus-4-8">Claude Opus 4.8 — le plus malin (recommandé)</option>
+        <option value="claude-sonnet-5">Claude Sonnet 5 — équilibré</option>
+        <option value="claude-haiku-4-5">Claude Haiku 4.5 — le plus rapide et économique</option>
+      </select>
+    </label>
+    <button class="btn small" onclick="testApi()">🔌 Tester la connexion</button>
+    <p id="api-test-result" style="margin-top:10px; font-size:14px;"></p>
+  </div>
+
+  <div class="card">
+    <h3>🎮 Partie</h3>
+    <label class="field">
+      <span>Difficulté du mot secret</span>
+      <select id="set-difficulty">
+        <option value="facile">Facile — mots très courants</option>
+        <option value="moyen" selected>Moyen</option>
+        <option value="difficile">Difficile — mots plus rares</option>
+      </select>
+    </label>
+    <div class="toggle-row">
+      <span>🔊 Voix du Maître (le téléphone parle)</span>
+      <label class="switch"><input type="checkbox" id="set-voice" checked><span class="slider"></span></label>
+    </div>
+  </div>
+  <p class="hint">Sans clé API, tu peux quand même jouer en <b>mode arbitre</b> : l'app choisit le mot, gère les lettres et les contacts, mais ne coupe pas vos indices.</p>
+</section>
+
+<!-- ═══════════════ JEU ═══════════════ -->
+<section id="screen-game" class="screen">
+  <div class="topbar">
+    <button class="icon-btn" onclick="confirmQuit()">←</button>
+    <h2>Mot secret</h2>
+    <button class="icon-btn" onclick="repeatState()" title="Répéter">🔊</button>
+  </div>
+
+  <div class="word-panel">
+    <div class="label">Le mot du Maître commence par</div>
+    <div class="letters" id="letters"></div>
+    <div class="stats">
+      <span>💡 Indices : <b id="stat-clues">0</b></span>
+      <span>✂️ Coupés : <b id="stat-cuts">0</b></span>
+      <span>🤝 Contacts : <b id="stat-contacts">0</b></span>
+    </div>
+  </div>
+
+  <div class="ai-bubble">
+    <div class="face" id="ai-face">🤖</div>
+    <div class="msg" id="ai-msg">…</div>
+  </div>
+
+  <div class="game-actions">
+    <button class="mic-btn" id="btn-clue" onclick="clueFlow()">🎙️ &nbsp;Répéter mon indice au Maître</button>
+    <div class="row">
+      <button class="btn good" onclick="contactFlow()">🤝 Contact !</button>
+      <button class="btn" onclick="guessFlow()">🎯 Le mot secret !</button>
+    </div>
+    <button class="btn ghost" onclick="giveUp()">🏳️ Abandonner</button>
+  </div>
+</section>
+
+<!-- ═══════════════ MODALE ═══════════════ -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ══════════════════════ Réglages ══════════════════════ */
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem("contact_" + key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem("contact_" + key, JSON.stringify(value)); } catch {} },
+};
+const settings = {
+  get apiKey() { return store.get("apiKey", ""); },
+  get model() { return store.get("model", "claude-opus-4-8"); },
+  get difficulty() { return store.get("difficulty", "moyen"); },
+  get voice() { return store.get("voice", true); },
+};
+function loadSettingsUI() {
+  document.getElementById("set-apikey").value = settings.apiKey;
+  document.getElementById("set-model").value = settings.model;
+  document.getElementById("set-difficulty").value = settings.difficulty;
+  document.getElementById("set-voice").checked = settings.voice;
+}
+function saveSettings() {
+  store.set("apiKey", document.getElementById("set-apikey").value.trim());
+  store.set("model", document.getElementById("set-model").value);
+  store.set("difficulty", document.getElementById("set-difficulty").value);
+  store.set("voice", document.getElementById("set-voice").checked);
+}
+
+/* ══════════════════════ Navigation / UI ══════════════════════ */
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  if (id === "screen-settings") loadSettingsUI();
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 3500);
+}
+function openModal(html) {
+  document.getElementById("modal").innerHTML = html;
+  document.getElementById("modal-backdrop").classList.add("open");
+}
+function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
+
+/* ══════════════════════ Voix ══════════════════════ */
+let frVoice = null;
+function pickVoice() {
+  const voices = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith("fr"));
+  frVoice = voices.find(v => /amélie|thomas|google.*fr/i.test(v.name)) || voices[0] || null;
+}
+if ("speechSynthesis" in window) {
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+function speak(text, done) {
+  setAiMsg(text);
+  if (!settings.voice || !("speechSynthesis" in window)) { if (done) done(); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "fr-FR";
+  if (frVoice) u.voice = frVoice;
+  u.rate = 1.02;
+  u.onend = () => { if (done) done(); };
+  u.onerror = () => { if (done) done(); };
+  speechSynthesis.speak(u);
+}
+function setAiMsg(text, sub) {
+  const el = document.getElementById("ai-msg");
+  el.innerHTML = escapeHtml(text) + (sub ? `<span class="sub">${escapeHtml(sub)}</span>` : "");
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+/* ══════════════════════ Écoute (micro) ══════════════════════ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function listenOnce(onResult, onFail) {
+  if (!SR) { onFail("no-support"); return null; }
+  const r = new SR();
+  r.lang = "fr-FR"; r.interimResults = false; r.maxAlternatives = 1;
+  let got = false;
+  r.onresult = e => { got = true; onResult(e.results[0][0].transcript.trim()); };
+  r.onerror = e => { if (!got) onFail(e.error); };
+  r.onend = () => { if (!got) onFail("silence"); };
+  try { r.start(); } catch { onFail("busy"); }
+  return r;
+}
+
+/* Modale générique « parle ou tape » — résout avec le texte, ou null si annulé. */
+function askSpoken(title, hint, next) {
+  let rec = null;
+  const cancel = () => { if (rec) try { rec.abort(); } catch {} closeModal(); next(null); };
+  const finish = (text) => { if (rec) try { rec.abort(); } catch {} closeModal(); next(text); };
+
+  openModal(`
+    <h3>${escapeHtml(title)}</h3>
+    <p>${escapeHtml(hint)}</p>
+    <button class="mic-btn" id="m-mic">🎙️ &nbsp;Parler</button>
+    <p style="text-align:center; margin:12px 0 6px;">— ou écris-le —</p>
+    <textarea id="m-text" rows="2" placeholder="Tape ici…"></textarea>
+    <div class="buttons">
+      <button class="btn primary" id="m-ok">Valider ✅</button>
+      <button class="btn ghost" id="m-cancel">Annuler</button>
+    </div>
+  `);
+  const micBtn = document.getElementById("m-mic");
+  const textEl = document.getElementById("m-text");
+  if (!SR) { micBtn.style.display = "none"; }
+  micBtn.onclick = () => {
+    micBtn.classList.add("listening");
+    micBtn.textContent = "🔴  Je t'écoute…";
+    rec = listenOnce(
+      t => { micBtn.classList.remove("listening"); micBtn.textContent = "🎙️  Parler"; textEl.value = t; },
+      err => {
+        micBtn.classList.remove("listening"); micBtn.textContent = "🎙️  Réessayer";
+        if (err === "not-allowed") toast("Micro refusé — autorise le micro dans les réglages du navigateur, ou tape ton texte.");
+        else if (err !== "aborted") toast("Je n'ai rien entendu, réessaie ou tape ton texte.");
+      }
+    );
+  };
+  document.getElementById("m-ok").onclick = () => {
+    const v = textEl.value.trim();
+    if (!v) { toast("Dis ou écris quelque chose d'abord 🙂"); return; }
+    finish(v);
+  };
+  document.getElementById("m-cancel").onclick = cancel;
+}
+
+/* ══════════════════════ API Claude ══════════════════════ */
+async function claude(promptText, schema, maxTokens) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": settings.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      max_tokens: maxTokens || 1024,
+      output_config: { effort: "low", format: { type: "json_schema", schema } },
+      messages: [{ role: "user", content: promptText }],
+    }),
+  });
+  if (!res.ok) {
+    let msg = "HTTP " + res.status;
+    try { const e = await res.json(); msg = e?.error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  if (data.stop_reason === "refusal") throw new Error("L'IA a refusé de répondre, réessaie.");
+  const text = (data.content || []).find(b => b.type === "text")?.text || "";
+  return JSON.parse(text);
+}
+
+const WORD_SCHEMA = {
+  type: "object",
+  properties: { word: { type: "string", description: "Le mot choisi, en minuscules, sans article" } },
+  required: ["word"], additionalProperties: false,
+};
+const GUESS_SCHEMA = {
+  type: "object",
+  properties: {
+    guess: { type: "string", description: "Ta meilleure hypothèse : un seul mot, en minuscules" },
+    taunt: { type: "string", description: "Une très courte phrase taquine (max 12 mots) à dire aux joueurs" },
+  },
+  required: ["guess", "taunt"], additionalProperties: false,
+};
+
+const DIFF_DESC = {
+  facile: "un mot TRÈS courant du quotidien, qu'un enfant de 8 ans connaît",
+  moyen: "un mot courant que tout adulte connaît, mais pas le plus évident",
+  difficile: "un mot un peu plus rare ou précis, mais connu de la plupart des adultes cultivés",
+};
+
+async function aiPickWord() {
+  const used = store.get("usedSecrets", []);
+  const out = await claude(
+    `Tu es le Maître du Mot au jeu "Contact" (en français). Choisis ton mot secret : ${DIFF_DESC[settings.difficulty]}.
+Contraintes :
+- un NOM COMMUN français au singulier, uniquement des lettres (pas de trait d'union, pas d'espace)
+- entre 5 et 11 lettres
+- INTERDIT de choisir un de ces mots déjà joués : ${used.length ? used.join(", ") : "(aucun)"}
+Choisis un mot varié et intéressant à faire deviner.`,
+    WORD_SCHEMA, 300
+  );
+  return cleanWord(out.word);
+}
+
+async function aiCut(clue) {
+  const out = await claude(
+    `Tu joues au jeu "Contact" (en français) et tu es le Maître du Mot. Ton mot secret est « ${game.secret} ».
+Les joueurs connaissent le début de ton mot : « ${prefix().toUpperCase()} ».
+Un joueur vient de donner cet indice à voix haute pour faire deviner à ses amis un mot commençant par « ${prefix().toUpperCase()} » (ce mot n'est PAS forcément ton mot secret) :
+« ${clue} »
+Devine le mot auquel ce joueur pense, pour pouvoir crier « Coupé ! » et bloquer le contact.
+Règles :
+- ta réponse doit commencer par « ${prefix().toUpperCase()} » (les accents ne comptent pas)
+- ces mots ont déjà été joués et sont interdits : ${game.usedWords.length ? game.usedWords.join(", ") : "(aucun)"}
+- réponds avec UN seul mot, ta meilleure hypothèse, même si tu hésites.`,
+    GUESS_SCHEMA, 400
+  );
+  return { guess: cleanWord(out.guess), taunt: out.taunt || "" };
+}
+
+async function testApi() {
+  saveSettings();
+  const out = document.getElementById("api-test-result");
+  if (!settings.apiKey) { out.textContent = "❌ Entre d'abord une clé API."; out.style.color = "var(--bad)"; return; }
+  out.textContent = "⏳ Test en cours…"; out.style.color = "var(--muted)";
+  try {
+    await claude("Réponds avec le mot 'bonjour'.", WORD_SCHEMA, 200);
+    out.textContent = "✅ Connexion réussie ! Le Maître IA est prêt.";
+    out.style.color = "var(--good)";
+  } catch (e) {
+    out.textContent = "❌ Échec : " + e.message;
+    out.style.color = "var(--bad)";
+  }
+}
+
+/* ══════════════════════ Mots hors-ligne (mode arbitre) ══════════════════════ */
+const OFFLINE_WORDS = {
+  facile: ["maison","soleil","fromage","cheval","bateau","montagne","chocolat","jardin","poisson","fenêtre","chanson","voiture","cadeau","bonbon","piscine","tortue","fusée","banane","papillon","chaussure","cuisine","dragon","fantôme","girafe","hôpital","journal","licorne","moustache","nuage","orage","pirate","robot","sirène","tambour","valise","volcan","éléphant","escargot","grenier","hérisson"],
+  moyen: ["boussole","cascade","brouillard","échafaud","carrousel","dentelle","escalade","falaise","glacier","hamac","horizon","labyrinthe","marionnette","naufrage","obstacle","parchemin","quiproquo","récolte","sarbacane","tourbillon","vestiaire","aquarium","bourgeon","charnière","crépuscule","embuscade","frontière","gargouille","harpon","insigne","jumelles","kiosque","luciole","mirage","nectar","offrande","pellicule","quenouille","rempart","silhouette"],
+  difficile: ["alambic","bréviaire","cénotaphe","dithyrambe","éphéméride","factotum","gibecière","hallebarde","incunable","jacquerie","lapalissade","mansuétude","nyctalope","obsidienne","palimpseste","quintessence","reliquaire","sarabande","tautologie","usufruit","vicissitude","wagonnet","zibeline","anicroche","balustrade","cabestan","dessicant","escarcelle","fenaison","gargote","haruspice","imprécation","jouvence","kaléidoscope","limonade","maelström","nasse","ostracisme","péninsule","quolibet"],
+};
+function offlinePickWord() {
+  const used = new Set(store.get("usedSecrets", []).map(norm));
+  const pool = OFFLINE_WORDS[settings.difficulty].filter(w => !used.has(norm(w)));
+  const list = pool.length ? pool : OFFLINE_WORDS[settings.difficulty];
+  return cleanWord(list[Math.floor(Math.random() * list.length)]);
+}
+
+/* ══════════════════════ Utilitaires mots ══════════════════════ */
+function norm(s) { return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, ""); }
+function cleanWord(w) { return String(w || "").toLowerCase().trim().replace(/^(le |la |les |un |une |l')/i, "").split(/\s+/)[0]; }
+function prefix() { return game.secret.slice(0, game.revealed); }
+
+/* ══════════════════════ État de la partie ══════════════════════ */
+let game = null;
+
+async function startGame() {
+  saveVisibleSettings();
+  const aiMode = !!settings.apiKey;
+  game = { secret: null, revealed: 1, usedWords: [], clues: 0, cuts: 0, contacts: 0, aiMode, over: false };
+  show("screen-game");
+  document.getElementById("btn-clue").style.display = aiMode ? "" : "none";
+  setAiMsg("Je choisis mon mot secret… 🤫");
+  renderGame();
+
+  try {
+    game.secret = aiMode ? await aiPickWord() : offlinePickWord();
+  } catch (e) {
+    toast("Impossible de contacter l'IA (" + e.message + "). Mode arbitre activé.");
+    game.aiMode = false;
+    document.getElementById("btn-clue").style.display = "none";
+    game.secret = offlinePickWord();
+  }
+  if (!game.secret || norm(game.secret).length < 3) game.secret = offlinePickWord();
+
+  const used = store.get("usedSecrets", []);
+  used.push(game.secret);
+  store.set("usedSecrets", used.slice(-200));
+
+  renderGame();
+  const intro = game.aiMode
+    ? `C'est parti ! J'ai choisi mon mot secret. Il commence par la lettre ${spellLetter(game.secret[0])}. Essayez de me faire craquer !`
+    : `C'est parti ! Le mot secret commence par la lettre ${spellLetter(game.secret[0])}. Donnez-vous des indices à voix haute, je m'occupe des lettres et des contacts !`;
+  speak(intro);
+}
+function saveVisibleSettings() {
+  if (document.getElementById("screen-settings").classList.contains("active")) saveSettings();
+}
+function spellLetter(l) { return l.toUpperCase(); }
+
+function renderGame() {
+  const lettersEl = document.getElementById("letters");
+  lettersEl.innerHTML = "";
+  if (game.secret) {
+    for (let i = 0; i < game.revealed; i++) {
+      const d = document.createElement("div");
+      d.className = "letter"; d.textContent = game.secret[i].toUpperCase();
+      lettersEl.appendChild(d);
+    }
+  }
+  const more = document.createElement("div");
+  more.className = "letter more"; more.textContent = "…";
+  lettersEl.appendChild(more);
+  document.getElementById("stat-clues").textContent = game.clues;
+  document.getElementById("stat-cuts").textContent = game.cuts;
+  document.getElementById("stat-contacts").textContent = game.contacts;
+}
+
+function repeatState() {
+  if (!game || !game.secret) return;
+  speak(`Mon mot commence par ${prefix().toUpperCase().split("").join(", ")}.`);
+}
+
+/* ══════════════════════ Flux : indice → coupe IA ══════════════════════ */
+function clueFlow() {
+  if (!game || game.over || !game.secret) return;
+  askSpoken(
+    "🎙️ Répète ton indice au Maître",
+    `Tu viens de donner un indice à voix haute pour un mot qui commence par « ${prefix().toUpperCase()} ». Répète-le au téléphone : le Maître IA va essayer de te couper !`,
+    async (clue) => {
+      if (!clue) return;
+      game.clues++;
+      renderGame();
+      openModal(`<h3>🤖 Le Maître réfléchit…</h3><div class="spinner"></div><p style="text-align:center">« ${escapeHtml(clue)} »</p>`);
+      let cut;
+      try {
+        cut = await aiCut(clue);
+      } catch (e) {
+        closeModal();
+        toast("Erreur IA : " + e.message);
+        return;
+      }
+      closeModal();
+      speak(`Coupé ! Est-ce que c'est… ${cut.guess} ?`);
+      openModal(`
+        <h3>✂️ Le Maître tente de couper !</h3>
+        <div class="big-word">${escapeHtml(cut.guess)}</div>
+        <p style="text-align:center">Le Maître a-t-il deviné le mot de ton indice ?</p>
+        <div class="buttons">
+          <button class="btn" id="m-cutyes">😤 Oui, coupé…</button>
+          <button class="btn primary" id="m-cutno">😏 Non, raté !</button>
+        </div>
+      `);
+      document.getElementById("m-cutyes").onclick = () => {
+        closeModal();
+        game.cuts++;
+        game.usedWords.push(cut.guess);
+        renderGame();
+        speak(cut.taunt || "Et voilà le travail ! Il vous faudra mieux que ça.");
+      };
+      document.getElementById("m-cutno").onclick = () => {
+        closeModal();
+        askContact(cut.guess);
+      };
+    }
+  );
+}
+
+function askContact(aiWrongGuess) {
+  openModal(`
+    <h3>🤝 Et maintenant ?</h3>
+    <p>Le Maître s'est trompé ! Est-ce qu'un autre joueur avait crié « Contact ! » sur cet indice ?</p>
+    <div class="buttons">
+      <button class="btn good" id="m-yes">🤝 Oui, contact !</button>
+      <button class="btn ghost" id="m-no">Non, personne</button>
+    </div>
+  `);
+  document.getElementById("m-yes").onclick = () => { closeModal(); countdown(() => resolveContact(aiWrongGuess)); };
+  document.getElementById("m-no").onclick = () => {
+    closeModal();
+    speak("Personne ? Ouf… je garde mes lettres pour cette fois !");
+  };
+}
+
+/* ══════════════════════ Flux : contact ══════════════════════ */
+function contactFlow() {
+  if (!game || game.over || !game.secret) return;
+  // Résolution directe d'un contact (sans passer par la coupe de l'IA)
+  countdown(() => resolveContact(null));
+}
+
+function countdown(done) {
+  openModal(`<h3 style="text-align:center">Dites votre mot en même temps !</h3><div class="countdown" id="cd">3</div>`);
+  const el = () => document.getElementById("cd");
+  speak("3", () => {});
+  let n = 3;
+  const tick = setInterval(() => {
+    n--;
+    if (n > 0) { if (el()) el().textContent = n; speak(String(n)); }
+    else {
+      clearInterval(tick);
+      if (el()) el().textContent = "CONTACT !";
+      speak("Contact !");
+      setTimeout(() => { closeModal(); done(); }, 900);
+    }
+  }, 1100);
+}
+
+function resolveContact(hint) {
+  openModal(`
+    <h3>Alors, même mot ?</h3>
+    <p>Les deux joueurs ont dit leur mot en même temps. C'était le même ?</p>
+    <div class="buttons">
+      <button class="btn good" id="m-win">🎉 Oui, le même !</button>
+      <button class="btn ghost" id="m-lose">💨 Non, raté</button>
+    </div>
+  `);
+  document.getElementById("m-win").onclick = () => {
+    closeModal();
+    askSpoken("Quel était le mot du contact ?", "Dis-le au téléphone pour qu'il soit noté (et interdit pour la suite).", (word) => {
+      const w = word ? cleanWord(word) : null;
+      if (w) {
+        if (norm(w) === norm(game.secret)) { winGame(true); return; }
+        game.usedWords.push(w);
+      }
+      game.contacts++;
+      revealLetter();
+    });
+  };
+  document.getElementById("m-lose").onclick = () => {
+    closeModal();
+    speak("Pas le même mot ! Quel beau quiproquo… Rien pour vous !");
+  };
+}
+
+function revealLetter() {
+  game.revealed++;
+  renderGame();
+  if (game.revealed >= game.secret.length) { winGame(false); return; }
+  const newLetter = game.secret[game.revealed - 1].toUpperCase();
+  speak(`Bien joué… je dois lâcher une lettre. La suivante est ${newLetter}. Mon mot commence par ${prefix().toUpperCase().split("").join(", ")}.`);
+}
+
+/* ══════════════════════ Flux : deviner le mot secret ══════════════════════ */
+function guessFlow() {
+  if (!game || game.over || !game.secret) return;
+  askSpoken(
+    "🎯 Tenter le mot secret !",
+    `Tu penses avoir trouvé LE mot du Maître (il commence par « ${prefix().toUpperCase()} ») ? Dis-le !`,
+    (word) => {
+      if (!word) return;
+      const w = cleanWord(word);
+      if (norm(w) === norm(game.secret)) { winGame(true); return; }
+      game.usedWords.push(w);
+      speak(`${w} ? Non non non, ce n'est pas du tout ça !`);
+    }
+  );
+}
+
+/* ══════════════════════ Fin de partie ══════════════════════ */
+function winGame(guessed) {
+  game.over = true;
+  const word = game.secret.toUpperCase();
+  speak(guessed
+    ? `Incroyable… vous avez trouvé ! Mon mot était bien ${game.secret}. Bravo à tous !`
+    : `Vous m'avez pris toutes mes lettres ! Mon mot était ${game.secret}. Victoire des joueurs !`);
+  endScreen("🏆", "Victoire des joueurs !", `Le mot secret était <b>${escapeHtml(word)}</b>.`);
+}
+function giveUp() {
+  if (!game || game.over) return;
+  openModal(`
+    <h3>🏳️ Abandonner ?</h3>
+    <p>Le Maître du Mot gagnera la partie et révélera son mot.</p>
+    <div class="buttons">
+      <button class="btn primary" id="m-giveup">Oui, on abandonne</button>
+      <button class="btn ghost" id="m-back">Non, on continue !</button>
+    </div>
+  `);
+  document.getElementById("m-giveup").onclick = () => {
+    closeModal();
+    game.over = true;
+    speak(`Victoire du Maître du Mot ! Mon mot était ${game.secret}. À la revanche !`);
+    endScreen("🤖", "Le Maître IA gagne !", `Son mot était <b>${escapeHtml(game.secret.toUpperCase())}</b>.`);
+  };
+  document.getElementById("m-back").onclick = closeModal;
+}
+function endScreen(emoji, title, sub) {
+  setTimeout(() => {
+    openModal(`
+      <div class="end-emoji">${emoji}</div>
+      <h3 style="text-align:center">${title}</h3>
+      <p style="text-align:center">${sub}<br>
+      💡 ${game.clues} indices · ✂️ ${game.cuts} coupés · 🤝 ${game.contacts} contacts</p>
+      <div class="buttons">
+        <button class="btn primary" id="m-again">🔁 Rejouer</button>
+        <button class="btn ghost" id="m-home">🏠 Accueil</button>
+      </div>
+    `);
+    document.getElementById("m-again").onclick = () => { closeModal(); startGame(); };
+    document.getElementById("m-home").onclick = () => { closeModal(); show("screen-home"); };
+  }, 600);
+}
+function confirmQuit() {
+  if (!game || game.over) { show("screen-home"); return; }
+  openModal(`
+    <h3>Quitter la partie ?</h3>
+    <div class="buttons">
+      <button class="btn primary" id="m-quit">Oui, quitter</button>
+      <button class="btn ghost" id="m-stay">Rester</button>
+    </div>
+  `);
+  document.getElementById("m-quit").onclick = () => { closeModal(); game.over = true; show("screen-home"); };
+  document.getElementById("m-stay").onclick = closeModal;
+}
+
+/* ══════════════════════ PWA ══════════════════════ */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+if (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone) {
+  document.getElementById("install-hint").style.display = "none";
+}
+</script>
+</body>
+</html>
