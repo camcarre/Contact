@@ -114,6 +114,22 @@
   .ai-bubble .msg .sub { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
 
   .game-actions { margin-top: auto; display: flex; flex-direction: column; gap: 12px; padding-top: 18px; }
+
+  /* ---------- Mode 100% vocal ---------- */
+  .vocal-panel { margin-top: auto; padding-top: 18px; text-align: center; }
+  .mic-orb {
+    width: 110px; height: 110px; border-radius: 50%; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center; font-size: 46px;
+    background: linear-gradient(135deg, var(--accent), #ff5470);
+    box-shadow: 0 8px 30px rgba(255, 84, 112, .4); transition: background .3s;
+  }
+  .mic-orb.listen { background: linear-gradient(135deg, #1f9d5f, var(--good)); animation: pulse 1.4s infinite; }
+  .mic-orb.think { background: linear-gradient(135deg, var(--accent2), var(--accent)); animation: spin-slow 1.6s linear infinite; }
+  .mic-orb.speak { background: linear-gradient(135deg, #4b7bff, #7a4bff); }
+  .mic-orb.off { background: var(--card); box-shadow: none; }
+  @keyframes spin-slow { to { transform: rotate(360deg); } }
+  .mic-label { margin-top: 12px; font-size: 17px; font-weight: 700; }
+  .vocal-panel .hint { margin-top: 10px; }
   .mic-btn {
     border: none; border-radius: 24px; padding: 22px; font-size: 20px; font-weight: 800;
     background: linear-gradient(90deg, var(--accent), #ff5470); color: #fff; cursor: pointer;
@@ -188,13 +204,13 @@
     Votre mission à tous : <b>deviner son mot</b> en lui arrachant des lettres, une par une !
   </div>
   <div class="card">
-    <h3>🗣️ Le tour de jeu (tout se passe à l'oral !)</h3>
+    <h3>🗣️ Le tour de jeu (100 % à la voix, sans toucher l'écran !)</h3>
     <ul>
+      <li>Le téléphone, posé au milieu, <b>écoute la table en continu</b> 🎤</li>
       <li>Un joueur pense à un mot qui commence par les lettres révélées (ex. « CA... ») et donne un <b>indice à voix haute</b> : « C'est un animal qui ronronne » 🐱</li>
-      <li>Si un <b>autre joueur</b> pense avoir trouvé, il crie <b>« CONTACT ! »</b></li>
-      <li>Mais attention : le joueur qui a donné l'indice appuie sur le micro et <b>répète son indice au téléphone</b>. Le Maître IA essaie alors de deviner le mot pour crier <b>« Coupé ! »</b> 🤖</li>
-      <li>Si l'IA trouve le mot → l'indice est grillé, rien ne se passe.</li>
-      <li>Si l'IA se trompe → les deux joueurs comptent « 3, 2, 1 » et disent leur mot <b>en même temps</b>. Si c'est le même mot : <b>le Maître doit révéler une lettre de plus !</b> 🎉</li>
+      <li>Le Maître IA entend l'indice et peut crier <b>« Coupé ! »</b> en proposant un mot. Répondez-lui simplement <b>« oui »</b> ou <b>« non »</b> 🤖</li>
+      <li>Si un autre joueur a trouvé, il crie <b>« CONTACT ! »</b>. Si le Maître n'a pas coupé, le téléphone compte « 3, 2, 1 » et les deux joueurs disent leur mot <b>en même temps</b>. Même mot ? <b>Le Maître révèle une lettre de plus !</b> 🎉</li>
+      <li>À tout moment, dites <b>« je propose le mot… »</b> pour tenter le mot secret, ou <b>« on abandonne »</b>.</li>
     </ul>
   </div>
   <div class="card">
@@ -256,6 +272,10 @@
       <span>🔊 Voix du Maître (le téléphone parle)</span>
       <label class="switch"><input type="checkbox" id="set-voice" checked><span class="slider"></span></label>
     </div>
+    <div class="toggle-row">
+      <span>🎙️ Mode 100 % vocal (aucun bouton en jeu)</span>
+      <label class="switch"><input type="checkbox" id="set-vocal" checked><span class="slider"></span></label>
+    </div>
   </div>
   <p class="hint">Sans clé API, tu peux quand même jouer en <b>mode arbitre</b> : l'app choisit le mot, gère les lettres et les contacts, mais ne coupe pas vos indices.</p>
 </section>
@@ -283,7 +303,14 @@
     <div class="msg" id="ai-msg">…</div>
   </div>
 
-  <div class="game-actions">
+  <div class="vocal-panel" id="vocal-panel" style="display:none">
+    <div class="mic-orb" id="mic-orb">🎤</div>
+    <div class="mic-label" id="mic-label">Je vous écoute…</div>
+    <p class="hint">Parlez normalement, sans toucher l'écran : donnez vos indices à voix haute,<br>
+    criez « Contact ! », dites « je propose le mot… » ou « on abandonne ».</p>
+  </div>
+
+  <div class="game-actions" id="game-buttons">
     <button class="mic-btn" id="btn-clue" onclick="clueFlow()">🎙️ &nbsp;Répéter mon indice au Maître</button>
     <div class="row">
       <button class="btn good" onclick="contactFlow()">🤝 Contact !</button>
@@ -312,18 +339,21 @@ const settings = {
   get model() { return store.get("model", "claude-opus-4-8"); },
   get difficulty() { return store.get("difficulty", "moyen"); },
   get voice() { return store.get("voice", true); },
+  get vocal() { return store.get("vocal", true); },
 };
 function loadSettingsUI() {
   document.getElementById("set-apikey").value = settings.apiKey;
   document.getElementById("set-model").value = settings.model;
   document.getElementById("set-difficulty").value = settings.difficulty;
   document.getElementById("set-voice").checked = settings.voice;
+  document.getElementById("set-vocal").checked = settings.vocal;
 }
 function saveSettings() {
   store.set("apiKey", document.getElementById("set-apikey").value.trim());
   store.set("model", document.getElementById("set-model").value);
   store.set("difficulty", document.getElementById("set-difficulty").value);
   store.set("voice", document.getElementById("set-voice").checked);
+  store.set("vocal", document.getElementById("set-vocal").checked);
 }
 
 /* ══════════════════════ Navigation / UI ══════════════════════ */
@@ -361,26 +391,43 @@ if ("speechSynthesis" in window) {
   pickVoice();
   speechSynthesis.onvoiceschanged = pickVoice;
 }
+let speakingNow = false;
+window.__spoken = []; // journal des phrases prononcées (utile pour les tests)
 function speak(text, done) {
   setAiMsg(text);
-  if (!settings.voice) { if (done) done(); return; }
+  window.__spoken.push(text);
+  // Coupe l'écoute pendant que le Maître parle (sinon il s'entend lui-même)
+  if (currentRec) { try { currentRec.abort(); } catch {} }
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(watchdog);
+    speakingNow = false;
+    if (done) done();
+  };
+  // Garde-fou : si la synthèse vocale ne signale jamais la fin, on continue quand même
+  const watchdog = setTimeout(finish, Math.min(15000, 2500 + text.length * 90));
+  if (!settings.voice) { finish(); return; }
+  speakingNow = true;
+  setMicStatus("speak");
   if (nativeTTS) {
     nativeTTS.stop().catch(() => {});
-    nativeTTS.speak({ text, lang: "fr-FR", rate: 1.0 })
-      .then(() => { if (done) done(); })
-      .catch(() => { if (done) done(); });
+    nativeTTS.speak({ text, lang: "fr-FR", rate: 1.0 }).then(finish).catch(finish);
     return;
   }
-  if (!("speechSynthesis" in window)) { if (done) done(); return; }
+  if (!("speechSynthesis" in window)) { finish(); return; }
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "fr-FR";
   if (frVoice) u.voice = frVoice;
   u.rate = 1.02;
-  u.onend = () => { if (done) done(); };
-  u.onerror = () => { if (done) done(); };
+  u.onend = finish;
+  u.onerror = finish;
   speechSynthesis.speak(u);
 }
+function say(text) { return new Promise((res) => speak(text, res)); }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function setAiMsg(text, sub) {
   const el = document.getElementById("ai-msg");
   el.innerHTML = escapeHtml(text) + (sub ? `<span class="sub">${escapeHtml(sub)}</span>` : "");
@@ -390,6 +437,7 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp
 /* ══════════════════════ Écoute (micro) ══════════════════════ */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const canListen = !!(nativeSR || SR);
+let currentRec = null;
 function listenOnce(onResult, onFail) {
   if (nativeSR) {
     let aborted = false;
@@ -540,6 +588,236 @@ Règles :
   return { guess: cleanWord(out.guess), taunt: out.taunt || "" };
 }
 
+/* ══════════════════════ Mode 100 % vocal ══════════════════════
+   Le téléphone écoute la table en continu. Chaque phrase entendue est
+   interprétée (localement pour oui/non/contact, par l'IA pour le reste)
+   et le Maître répond à voix haute. Aucun bouton pendant la partie. */
+const vocal = { state: "libre", pendingGuess: "", contactPending: false, busy: false };
+let hearingActive = false;
+
+function setMicStatus(s) {
+  const orb = document.getElementById("mic-orb");
+  const label = document.getElementById("mic-label");
+  if (!orb) return;
+  orb.className = "mic-orb " + s;
+  orb.textContent = { listen: "🎤", think: "🤔", speak: "🔊", off: "⏸️" }[s] || "🎤";
+  label.textContent = {
+    listen: "Je vous écoute…",
+    think: "Je réfléchis…",
+    speak: "Je parle…",
+    off: "En pause",
+  }[s] || "";
+}
+
+function listenOncePromise() {
+  return new Promise((res) => {
+    let done = false;
+    let guard = null;
+    const finish = (v) => { if (done) return; done = true; clearTimeout(guard); currentRec = null; res(v); };
+    currentRec = listenOnce(
+      (t) => finish(t),
+      (err) => finish(err === "not-allowed" || err === "no-support" ? { error: err } : null)
+    );
+    guard = setTimeout(() => { if (currentRec) { try { currentRec.abort(); } catch {} } finish(null); }, 20000);
+  });
+}
+
+async function hearingLoop() {
+  if (hearingActive) return;
+  hearingActive = true;
+  while (game && !game.over && game.vocal) {
+    if (speakingNow || vocal.busy) { await sleep(200); continue; }
+    setMicStatus("listen");
+    const heard = await listenOncePromise();
+    if (!game || game.over || !game.vocal) break;
+    if (heard && heard.error) { vocalFallback(heard.error); break; }
+    if (!heard) continue;
+    vocal.busy = true;
+    setMicStatus("think");
+    try { await onHeard(heard); } catch (e) { toast("Oups : " + e.message); }
+    vocal.busy = false;
+  }
+  hearingActive = false;
+  setMicStatus("off");
+}
+
+function vocalFallback(err) {
+  game.vocal = false;
+  document.getElementById("vocal-panel").style.display = "none";
+  document.getElementById("game-buttons").style.display = "";
+  document.getElementById("btn-clue").style.display = game.aiMode ? "" : "none";
+  toast(err === "not-allowed"
+    ? "Micro refusé — autorise-le dans les réglages du navigateur. En attendant, joue avec les boutons."
+    : "Pas de reconnaissance vocale sur cet appareil — joue avec les boutons.");
+}
+
+const normPhrase = (s) => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z\s']/g, " ").replace(/\s+/g, " ").trim();
+const saidYes = (np) => /(^|\s)(oui|ouais|ouaip|yes|exact|voila|carrement|affirmatif|tout a fait|c'est ca)($|\s)/.test(np);
+const saidNo = (np) => /(^|\s)(non|nan|nope|rate|perdu|pas du tout|negatif|meme pas)($|\s)/.test(np);
+const biggestWord = (text) => normPhrase(text).split(" ").filter(w => w.length > 2).sort((a, b) => b.length - a.length)[0] || "";
+
+async function onHeard(raw) {
+  const text = String(raw).trim();
+  if (!text) return;
+  const np = normPhrase(text);
+
+  switch (vocal.state) {
+    case "attente_confirmation_coupe": {
+      if (saidYes(np)) {
+        game.cuts++;
+        game.usedWords.push(vocal.pendingGuess);
+        vocal.state = "libre"; vocal.contactPending = false;
+        renderGame();
+        await say("Et voilà le travail ! Cet indice est grillé. Suivant !");
+      } else if (saidNo(np)) {
+        if (vocal.contactPending) {
+          vocal.contactPending = false;
+          await vocalCountdown();
+          vocal.state = "attente_meme_mot";
+          await say("Alors, vous avez dit le même mot ? Oui ou non ?");
+        } else {
+          vocal.state = "attente_contact";
+          await say("Raté, bon… Est-ce que quelqu'un avait crié contact ? Oui ou non ?");
+        }
+      } else {
+        await say(`Oui ou non : est-ce que c'était bien ${vocal.pendingGuess} ?`);
+      }
+      return;
+    }
+    case "attente_contact": {
+      if (saidYes(np)) {
+        await vocalCountdown();
+        vocal.state = "attente_meme_mot";
+        await say("Vous avez dit le même mot ? Oui ou non ?");
+      } else if (saidNo(np)) {
+        vocal.state = "libre";
+        await say("Personne ? Ouf, je garde mes lettres !");
+      } else {
+        await say("Il y avait un contact ? Répondez par oui ou non.");
+      }
+      return;
+    }
+    case "attente_meme_mot": {
+      if (saidYes(np)) {
+        vocal.state = "attente_mot_contact";
+        await say("Bien joué… Dites-moi quel était votre mot.");
+      } else if (saidNo(np)) {
+        vocal.state = "libre";
+        await say("Pas le même mot ! Quel quiproquo… Rien pour vous.");
+      } else {
+        await say("Même mot tous les deux ? Oui ou non ?");
+      }
+      return;
+    }
+    case "attente_mot_contact": {
+      const w = biggestWord(text);
+      if (!w) { await say("Je n'ai pas compris le mot, répétez-le."); return; }
+      vocal.state = "libre";
+      if (norm(w) === norm(game.secret)) { winGame(true); return; }
+      game.usedWords.push(w);
+      game.contacts++;
+      revealLetter();
+      return;
+    }
+    case "attente_indice_contact": {
+      game.clues++;
+      renderGame();
+      let cut;
+      try { cut = await aiCut(text); }
+      catch (e) { vocal.state = "libre"; await say("Je n'ai pas réussi à réfléchir, on continue !"); return; }
+      vocal.pendingGuess = cut.guess;
+      vocal.contactPending = true;
+      vocal.state = "attente_confirmation_coupe";
+      await say(`Coupé ! Est-ce que c'est… ${cut.guess} ? Oui ou non ?`);
+      return;
+    }
+    case "attente_abandon": {
+      if (saidYes(np)) { vocalLose(); }
+      else { vocal.state = "libre"; await say("Ah, vous reprenez du courage ! On continue."); }
+      return;
+    }
+  }
+
+  /* ── État libre : le téléphone écoute la table ── */
+  if (/(^|\s)contact($|\s|!)/.test(np) && np.length < 30) {
+    vocal.state = "attente_indice_contact";
+    await say("Contact ! Donneur d'indice, répète ton indice, que je tente de couper !");
+    return;
+  }
+  if (/repete|rappelle|quelles lettres|les lettres/.test(np)) { await say(`Mon mot commence par ${prefix().toUpperCase().split("").join(", ")}.`); return; }
+  if (np.length < 6) return; // trop court : bruit
+
+  let d;
+  try { d = await aiClassify(text); }
+  catch (e) { return; } // au pire, on ignore la phrase
+
+  if (d.intent === "indice" && d.coupe) {
+    game.clues++;
+    renderGame();
+    vocal.pendingGuess = cleanWord(d.coupe);
+    vocal.contactPending = false;
+    vocal.state = "attente_confirmation_coupe";
+    await say(`Coupé ! Est-ce que c'est… ${vocal.pendingGuess} ? Oui ou non ?`);
+  } else if (d.intent === "contact") {
+    vocal.state = "attente_indice_contact";
+    await say("Contact ! Donneur d'indice, répète ton indice, que je tente de couper !");
+  } else if (d.intent === "proposition_mot" && d.mot) {
+    const w = cleanWord(d.mot);
+    if (norm(w) === norm(game.secret)) { winGame(true); return; }
+    game.usedWords.push(w);
+    await say(`${w} ? Non non non, ce n'est pas du tout ça !`);
+  } else if (d.intent === "abandon") {
+    vocal.state = "attente_abandon";
+    await say("Vous voulez vraiment abandonner ? Dites oui ou non.");
+  }
+  // bavardage → silence
+}
+
+async function vocalCountdown() {
+  openModal(`<h3 style="text-align:center">Dites votre mot en même temps !</h3><div class="countdown" id="cd">3</div>`);
+  const el = () => document.getElementById("cd");
+  for (const n of ["3", "2", "1"]) {
+    if (el()) el().textContent = n;
+    await say(n);
+    await sleep(250);
+  }
+  if (el()) el().textContent = "CONTACT !";
+  await say("Contact !");
+  await sleep(500);
+  closeModal();
+}
+
+function vocalLose() {
+  game.over = true;
+  speak(`Victoire du Maître du Mot ! Mon mot était ${game.secret}. À la revanche !`);
+  endScreen("🤖", "Le Maître IA gagne !", `Son mot était <b>${escapeHtml(game.secret.toUpperCase())}</b>.`);
+}
+
+const CLASSIFY_SCHEMA = {
+  type: "object",
+  properties: {
+    intent: { type: "string", enum: ["indice", "contact", "proposition_mot", "abandon", "bavardage"] },
+    mot: { type: "string", description: "Le mot proposé si intent=proposition_mot, sinon chaîne vide" },
+    coupe: { type: "string", description: "Si intent=indice : ta meilleure hypothèse du mot visé (un seul mot, minuscules), sinon chaîne vide" },
+  },
+  required: ["intent", "mot", "coupe"], additionalProperties: false,
+};
+
+async function aiClassify(text) {
+  return claude(
+    `Tu es le Maître du Mot au jeu "Contact" (en français), en pleine partie. Ton mot secret est « ${game.secret} ». Les joueurs connaissent le début : « ${prefix().toUpperCase()} ». Mots déjà joués, interdits : ${game.usedWords.length ? game.usedWords.join(", ") : "(aucun)"}.
+Le téléphone, posé au milieu de la table, vient d'entendre cette phrase (transcription vocale parfois imparfaite) :
+« ${text} »
+Classe cette phrase :
+- "indice" : un joueur donne un indice ou une définition pour faire deviner à ses amis un mot commençant par « ${prefix().toUpperCase()} » (ex. "c'est un animal qui ronronne"). Dans ce cas, remplis "coupe" avec ta meilleure hypothèse du mot visé (il commence par « ${prefix().toUpperCase()} », accents ignorés, un seul mot) pour pouvoir crier Coupé.
+- "contact" : quelqu'un crie contact pour dire qu'il a deviné le mot de l'indice.
+- "proposition_mot" : un joueur tente de deviner TON mot secret (ex. "je propose castor", "ton mot c'est castor"). Mets le mot proposé dans "mot".
+- "abandon" : les joueurs veulent arrêter la partie.
+- "bavardage" : discussion entre joueurs, bruit, ou phrase sans rapport avec le jeu. Dans le doute, choisis "bavardage".`,
+    CLASSIFY_SCHEMA, 400
+  );
+}
+
 async function testApi() {
   saveSettings();
   const out = document.getElementById("api-test-result");
@@ -579,9 +857,14 @@ let game = null;
 async function startGame() {
   saveVisibleSettings();
   const aiMode = !!settings.apiKey;
-  game = { secret: null, revealed: 1, usedWords: [], clues: 0, cuts: 0, contacts: 0, aiMode, over: false };
+  game = {
+    secret: null, revealed: 1, usedWords: [], clues: 0, cuts: 0, contacts: 0,
+    aiMode, over: false,
+    vocal: aiMode && settings.vocal && canListen,
+  };
+  vocal.state = "libre"; vocal.pendingGuess = ""; vocal.contactPending = false; vocal.busy = false;
   show("screen-game");
-  document.getElementById("btn-clue").style.display = aiMode ? "" : "none";
+  applyGameModeUI();
   setAiMsg("Je choisis mon mot secret… 🤫");
   renderGame();
 
@@ -590,7 +873,8 @@ async function startGame() {
   } catch (e) {
     toast("Impossible de contacter l'IA (" + e.message + "). Mode arbitre activé.");
     game.aiMode = false;
-    document.getElementById("btn-clue").style.display = "none";
+    game.vocal = false;
+    applyGameModeUI();
     game.secret = offlinePickWord();
   }
   if (!game.secret || norm(game.secret).length < 3) game.secret = offlinePickWord();
@@ -600,10 +884,23 @@ async function startGame() {
   store.set("usedSecrets", used.slice(-200));
 
   renderGame();
-  const intro = game.aiMode
-    ? `C'est parti ! J'ai choisi mon mot secret. Il commence par la lettre ${spellLetter(game.secret[0])}. Essayez de me faire craquer !`
-    : `C'est parti ! Le mot secret commence par la lettre ${spellLetter(game.secret[0])}. Donnez-vous des indices à voix haute, je m'occupe des lettres et des contacts !`;
-  speak(intro);
+  let intro;
+  if (game.vocal) {
+    intro = `C'est parti ! J'ai choisi mon mot secret. Il commence par la lettre ${spellLetter(game.secret[0])}. Je vous écoute en permanence : donnez vos indices à voix haute, et gare à mes coupes !`;
+  } else if (game.aiMode) {
+    intro = `C'est parti ! J'ai choisi mon mot secret. Il commence par la lettre ${spellLetter(game.secret[0])}. Essayez de me faire craquer !`;
+  } else {
+    intro = `C'est parti ! Le mot secret commence par la lettre ${spellLetter(game.secret[0])}. Donnez-vous des indices à voix haute, je m'occupe des lettres et des contacts !`;
+  }
+  speak(intro, () => { if (game.vocal) hearingLoop(); });
+}
+
+function applyGameModeUI() {
+  const isVocal = !!(game && game.vocal);
+  document.getElementById("vocal-panel").style.display = isVocal ? "" : "none";
+  document.getElementById("game-buttons").style.display = isVocal ? "none" : "";
+  document.getElementById("btn-clue").style.display = (game && game.aiMode && !isVocal) ? "" : "none";
+  if (!isVocal) setMicStatus("off");
 }
 function saveVisibleSettings() {
   if (document.getElementById("screen-settings").classList.contains("active")) saveSettings();
@@ -824,6 +1121,9 @@ function confirmQuit() {
   document.getElementById("m-quit").onclick = () => { closeModal(); game.over = true; show("screen-home"); };
   document.getElementById("m-stay").onclick = closeModal;
 }
+
+/* Crochet de test : simule une phrase entendue par le micro */
+window.__hear = (t) => onHeard(t);
 
 /* ══════════════════════ PWA ══════════════════════ */
 if ("serviceWorker" in navigator && location.protocol === "https:") {
